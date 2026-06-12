@@ -52,9 +52,21 @@ function writeSkill(root, provider, name) {
   writeFileSync(join(dir, 'SKILL.md'), `---\nname: ${name}\n---\nRun /${name}.\n`);
 }
 
+/** Create sidecar dirs (agents, workflows) in the source for a provider. */
+function writeSidecars(root, provider) {
+  const agentsDir = join(root, provider, 'agents');
+  mkdirSync(agentsDir, { recursive: true });
+  writeFileSync(join(agentsDir, 'agent.md'), 'agent content');
+
+  const workflowsDir = join(root, provider, 'workflows');
+  mkdirSync(workflowsDir, { recursive: true });
+  writeFileSync(join(workflowsDir, 'workflow.md'), 'workflow content');
+}
+
 function createFakeLinkSource(root, providers = ['.claude']) {
   for (const provider of providers) {
     writeSkill(join(root, '.impeccable', 'dist', 'universal'), provider, 'impeccable');
+    writeSidecars(join(root, '.impeccable', 'dist', 'universal'), provider);
   }
 }
 
@@ -157,6 +169,13 @@ describe('skills link: submodule installs', () => {
       expect(lstatSync(dest).isSymbolicLink()).toBe(true);
       expect(readlinkSync(dest).startsWith('/')).toBe(false);
       expect(realpathSync(dest)).toBe(realpathSync(src));
+
+      for (const subDir of ['agents', 'workflows']) {
+        const s = join(tmp, provider, subDir);
+        const sSrc = join(tmp, '.impeccable', 'dist', 'universal', provider, subDir);
+        expect(lstatSync(s).isSymbolicLink()).toBe(true);
+        expect(realpathSync(s)).toBe(realpathSync(sSrc));
+      }
     }
 
     rmSync(tmp, { recursive: true, force: true });
@@ -173,6 +192,8 @@ describe('skills link: submodule installs', () => {
 
     expect(output).toContain('already linked');
     expect(readlinkSync(join(tmp, '.claude', 'skills', 'impeccable'))).toBe(before);
+    expect(lstatSync(join(tmp, '.claude', 'agents')).isSymbolicLink()).toBe(true);
+    expect(lstatSync(join(tmp, '.claude', 'workflows')).isSymbolicLink()).toBe(true);
 
     rmSync(tmp, { recursive: true, force: true });
   }, 15000);
@@ -183,12 +204,17 @@ describe('skills link: submodule installs', () => {
     createFakeLinkSource(tmp);
     writeSkill(tmp, '.claude', 'impeccable');
 
-    expect(() => run('skills link --source=.impeccable --providers=claude -y', { cwd: tmp })).toThrow();
+    // Without --force the skill is skipped, but sidecars still get linked
+    const first = run('skills link --source=.impeccable --providers=claude -y', { cwd: tmp });
+    expect(first).toContain('skipped');
     const dest = join(tmp, '.claude', 'skills', 'impeccable');
     expect(lstatSync(dest).isSymbolicLink()).toBe(false);
+    expect(lstatSync(join(tmp, '.claude', 'agents')).isSymbolicLink()).toBe(true);
+    expect(lstatSync(join(tmp, '.claude', 'workflows')).isSymbolicLink()).toBe(true);
 
-    const output = run('skills link --source=.impeccable --providers=claude -y --force', { cwd: tmp });
-    expect(output).toContain('1 linked');
+    // With --force the real skill dir is replaced with a link; sidecars stay
+    const second = run('skills link --source=.impeccable --providers=claude -y --force', { cwd: tmp });
+    expect(second).toContain('1 linked');
     expect(lstatSync(dest).isSymbolicLink()).toBe(true);
 
     rmSync(tmp, { recursive: true, force: true });
@@ -201,9 +227,12 @@ describe('skills link: submodule installs', () => {
 
     run('skills link --source=.impeccable --providers=codex,rovo-dev,antigravity -y', { cwd: tmp });
 
-    expect(lstatSync(join(tmp, '.agents', 'skills', 'impeccable')).isSymbolicLink()).toBe(true);
-    expect(lstatSync(join(tmp, '.rovodev', 'skills', 'impeccable')).isSymbolicLink()).toBe(true);
-    expect(lstatSync(join(tmp, '.agent', 'skills', 'impeccable')).isSymbolicLink()).toBe(true);
+    for (const provider of ['.agents', '.rovodev', '.agent']) {
+      expect(lstatSync(join(tmp, provider, 'skills', 'impeccable')).isSymbolicLink()).toBe(true);
+      for (const subDir of ['agents', 'workflows']) {
+        expect(lstatSync(join(tmp, provider, subDir)).isSymbolicLink()).toBe(true);
+      }
+    }
 
     rmSync(tmp, { recursive: true, force: true });
   }, 15000);

@@ -528,10 +528,12 @@ function linkProviderSkills(bundleRoot, root, targets, { force = false } = {}) {
         // Link 'agents' and 'workflows' as a whole
         if (pathExistsOrLink(localDir)) {
           if (isSymlinkTo(localDir, srcDir)) {
+            already++;
             continue;
           }
           if (!force) {
             console.warn(`Skipped existing ${provider}/${subDir}. Use --force to replace it with a link.`);
+            skipped++;
             continue;
           }
           rmSync(localDir, { recursive: true, force: true });
@@ -539,6 +541,7 @@ function linkProviderSkills(bundleRoot, root, targets, { force = false } = {}) {
         mkdirSync(dirname(localDir), { recursive: true });
         const target = relative(dirname(localDir), srcDir) || '.';
         symlinkSync(target, localDir, 'dir');
+        linked++;
       }
     }
   }
@@ -801,35 +804,36 @@ async function update(flags = []) {
     const migrated = migrateUnprefixImpeccable(root);
     if (migrated > 0) console.log('Migrated a prefixed install back to /impeccable (the i- prefix is no longer used).');
 
-    // Copy from the bundle to each unique provider folder.
-    // Deduplicate so symlinked dirs (e.g. .claude/skills -> .agents/skills)
-    // are only written once with the correct provider's content.
+    // Sync skills using deduped providers so symlinked dirs (e.g.
+    // .claude/skills -> .agents/skills) are only written once.
     const unique = deduplicateProviders(root, copyProviders);
     let updated = 0;
-    const subDirs = ['skills', 'agents', 'workflows'];
 
     for (const { provider } of unique) {
-      for (const subDir of subDirs) {
+      const srcDir = join(tmpDir, provider, 'skills');
+      if (!existsSync(srcDir)) continue;
+
+      const localDir = join(root, provider, 'skills');
+
+      const skills = readdirSync(srcDir, { withFileTypes: true });
+      for (const skill of skills) {
+        if (!skill.isDirectory()) continue;
+        const src = join(srcDir, skill.name);
+        const dest = join(localDir, skill.name);
+        if (existsSync(dest)) rmSync(dest, { recursive: true });
+        copyDirSync(src, dest);
+        updated++;
+      }
+    }
+
+    // Sync sidecar dirs (agents, workflows) for ALL providers — dedup
+    // doesn't apply here because sidecars aren't symlinked between providers.
+    for (const provider of copyProviders) {
+      for (const subDir of ['agents', 'workflows']) {
         const srcDir = join(tmpDir, provider, subDir);
         if (!existsSync(srcDir)) continue;
-
-        const localDir = join(root, provider, subDir);
-
-        if (subDir === 'skills') {
-          const skills = readdirSync(srcDir, { withFileTypes: true });
-          for (const skill of skills) {
-            if (!skill.isDirectory()) continue;
-            const src = join(srcDir, skill.name);
-            const dest = join(localDir, skill.name);
-            if (existsSync(dest)) rmSync(dest, { recursive: true });
-            copyDirSync(src, dest);
-            updated++;
-          }
-        } else {
-          // For 'agents' and 'workflows', refresh the entire directory
-          rmSync(localDir, { recursive: true, force: true });
-          copyDirSync(srcDir, localDir);
-        }
+        rmSync(join(root, provider, subDir), { recursive: true, force: true });
+        copyDirSync(srcDir, join(root, provider, subDir));
       }
     }
 
