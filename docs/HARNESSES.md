@@ -19,6 +19,7 @@ Last verified: 2026-04-28
 | Pi | https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/skills.md |
 | Qoder | https://docs.qoder.com/extensions/skills |
 | Trae | TBD (no official skills docs found yet) |
+| Antigravity | https://antigravity.google/docs/cli-getting-started |
 | Rovo Dev | https://support.atlassian.com/rovo/docs/extend-rovo-dev-cli-with-agent-skills |
 
 ## Spec Compliance
@@ -31,22 +32,22 @@ Provider-specific extensions beyond the spec: `user-invocable`, `argument-hint`,
 
 Fields marked with * are spec-standard. Others are provider extensions.
 
-| Field | Claude Code | Cursor | Gemini | Codex | Copilot | Kiro | OpenCode | Pi | Qoder | Rovo Dev |
-|-------|:-----------:|:------:|:------:|:-----:|:-------:|:----:|:--------:|:--:|:-----:|:--------:|
-| `name`* | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
-| `description`* | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
-| `license`* | Yes | Yes | Ignored | No | Yes | Yes | Yes | Yes | Yes | Yes |
-| `compatibility`* | Yes | Yes | Ignored | No | Yes | Yes | Yes | Yes | Yes | Yes |
-| `metadata`* | Yes | Yes | Ignored | No | Yes | Yes | Yes | Yes | Yes | Yes |
-| `allowed-tools`* | Yes | No | Ignored | No | No | No | Yes | Yes | Yes | Yes |
-| `user-invocable` | Yes | No | No | No | Yes | No | Yes | No | Yes | Yes |
-| `argument-hint` | Yes | No | No | No | Yes | No | Yes | No | Yes | Yes |
-| `disable-model-invocation` | Yes | Yes | No | No | Yes | No | Yes | Yes | TBD | TBD |
-| `model` | Yes | No | No | No | No | No | Yes | No | No | No |
-| `effort` | Yes | No | No | No | No | No | No | No | No | No |
-| `context` | Yes | No | No | No | No | No | No | No | No | No |
-| `agent` | Yes | No | No | No | No | No | Yes | No | No | No |
-| `hooks` | Yes | No | No | No | No | No | No | No | No | No |
+| Field | Claude Code | Cursor | Gemini | Codex | Copilot | Kiro | OpenCode | Pi | Qoder | Rovo Dev | Antigravity |
+|-------|:-----------:|:------:|:------:|:-----:|:-------:|:----:|:--------:|:--:|:-----:|:--------:|:-----------:|
+| `name`* | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
+| `description`* | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
+| `license`* | Yes | Yes | Ignored | No | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
+| `compatibility`* | Yes | Yes | Ignored | No | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
+| `metadata`* | Yes | Yes | Ignored | No | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
+| `allowed-tools`* | Yes | No | Ignored | No | No | No | Yes | Yes | Yes | Yes | Yes |
+| `user-invocable` | Yes | No | No | No | Yes | No | Yes | No | Yes | Yes | Yes |
+| `argument-hint` | Yes | No | No | No | Yes | No | Yes | No | Yes | Yes | Yes |
+| `disable-model-invocation` | Yes | Yes | No | No | Yes | No | Yes | Yes | TBD | TBD | Yes |
+| `model` | Yes | No | No | No | No | No | Yes | No | No | No | Yes |
+| `effort` | Yes | No | No | No | No | No | No | No | No | No | Yes |
+| `context` | Yes | No | No | No | No | No | No | No | No | No | Yes |
+| `agent` | Yes | No | No | No | No | No | Yes | No | No | No | Yes |
+| `hooks` | Yes | No | No | No | No | No | No | No | No | No | Yes |
 
 Notes:
 - Gemini CLI validates only `name` and `description`; other spec fields are parsed but ignored.
@@ -69,6 +70,7 @@ Notes:
 | Qoder | `.qoder/skills/` | `~/.qoder/skills/` (user-level) |
 | Trae China | `.trae-cn/skills/` | TBD |
 | Trae International | `.trae/skills/` | TBD |
+| Antigravity | `.agent/skills/` | - |
 | Rovo Dev | `.rovodev/skills/` | `~/.rovodev/skills/` (user-level) |
 
 All harnesses support the `{skill-name}/SKILL.md` directory structure with optional `reference/`, `scripts/`, and `assets/` subdirectories.
@@ -78,6 +80,7 @@ All harnesses support the `{skill-name}/SKILL.md` directory structure with optio
 | Harness | Native directory | File format |
 |---------|------------------|-------------|
 | Claude Code | `.claude/agents/` (installed plugin) | Markdown with YAML frontmatter |
+| Antigravity | `.agent/workflows/` (project root) | Markdown with YAML frontmatter |
 | Codex CLI | `<skill>/agents/` (nested, auto-discovered) | TOML |
 
 Impeccable keeps canonical agent prompts under `skill/agents/` and emits provider-native files only for harnesses with documented subagent formats. Claude reads its agents from the installed plugin; Codex auto-discovers the TOML bundled inside the installed skill's own `agents/` folder, so the normal skills install carries it with no separate sidecar.
