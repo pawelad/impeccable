@@ -58,7 +58,7 @@ function createFakeLinkSource(root, providers = ['.claude']) {
   }
 }
 
-function createFakeUniversalBundle(root, providers = ['.claude', '.agents', '.cursor']) {
+function createFakeUniversalBundle(root, providers = ['.claude', '.agents', '.cursor', '.agent']) {
   const bundleRoot = join(root, 'universal-bundle');
   for (const provider of providers) {
     const skillDir = join(bundleRoot, provider, 'skills', 'impeccable');
@@ -72,6 +72,15 @@ function createFakeUniversalBundle(root, providers = ['.claude', '.agents', '.cu
       `Local deterministic bundle for ${provider}.`,
     ].join('\n'));
     writeFileSync(join(skillDir, 'scripts', 'context.mjs'), 'console.log("local bundle context");\n');
+
+    // Simulate sidecars
+    const agentsDir = join(bundleRoot, provider, 'agents');
+    mkdirSync(agentsDir, { recursive: true });
+    writeFileSync(join(agentsDir, 'agent.md'), 'agent content');
+
+    const workflowsDir = join(bundleRoot, provider, 'workflows');
+    mkdirSync(workflowsDir, { recursive: true });
+    writeFileSync(join(workflowsDir, 'workflow.md'), 'workflow content');
   }
   return bundleRoot;
 }
@@ -185,15 +194,16 @@ describe('skills link: submodule installs', () => {
     rmSync(tmp, { recursive: true, force: true });
   }, 15000);
 
-  test('maps codex and rovo-dev provider aliases to their install folders', () => {
+  test('maps codex, antigravity and rovo-dev provider aliases to their install folders', () => {
     const tmp = mkdtempSync(join(tmpdir(), 'imp-test-link-alias-'));
     execSync('git init', { cwd: tmp });
-    createFakeLinkSource(tmp, ['.agents', '.rovodev']);
+    createFakeLinkSource(tmp, ['.agents', '.rovodev', '.agent']);
 
-    run('skills link --source=.impeccable --providers=codex,rovo-dev -y', { cwd: tmp });
+    run('skills link --source=.impeccable --providers=codex,rovo-dev,antigravity -y', { cwd: tmp });
 
     expect(lstatSync(join(tmp, '.agents', 'skills', 'impeccable')).isSymbolicLink()).toBe(true);
     expect(lstatSync(join(tmp, '.rovodev', 'skills', 'impeccable')).isSymbolicLink()).toBe(true);
+    expect(lstatSync(join(tmp, '.agent', 'skills', 'impeccable')).isSymbolicLink()).toBe(true);
 
     rmSync(tmp, { recursive: true, force: true });
   }, 15000);
@@ -318,17 +328,21 @@ describe('skills install/update: local universal bundle e2e', () => {
     execSync('git init', { cwd: tmp });
     const bundleRoot = createFakeUniversalBundle(tmp);
 
-    const output = run('skills install -y --providers=claude,codex,cursor', {
+    const output = run('skills install -y --providers=claude,agents,cursor,antigravity', {
       cwd: tmp,
       env: { ...process.env, IMPECCABLE_BUNDLE_PATH: bundleRoot },
     });
+
     expect(output).toContain('Done!');
 
-    for (const provider of ['.claude', '.agents', '.cursor']) {
+    for (const provider of ['.claude', '.agents', '.cursor', '.agent']) {
       const skillDir = join(tmp, provider, 'skills', 'impeccable');
       expect(existsSync(join(skillDir, 'SKILL.md'))).toBe(true);
       expect(readFileSync(join(skillDir, 'SKILL.md'), 'utf8')).toContain(`Local deterministic bundle for ${provider}.`);
       expect(existsSync(join(skillDir, 'scripts', 'context.mjs'))).toBe(true);
+
+      expect(existsSync(join(tmp, provider, 'agents', 'agent.md'))).toBe(true);
+      expect(existsSync(join(tmp, provider, 'workflows', 'workflow.md'))).toBe(true);
     }
 
     rmSync(tmp, { recursive: true, force: true });
@@ -353,6 +367,9 @@ describe('skills install/update: local universal bundle e2e', () => {
     expect(content).not.toContain('stale: true');
     expect(content).toContain('version: 9.9.9-local');
     expect(existsSync(join(skillDir, 'scripts', 'context.mjs'))).toBe(true);
+
+    expect(existsSync(join(tmp, '.claude', 'agents', 'agent.md'))).toBe(true);
+    expect(existsSync(join(tmp, '.claude', 'workflows', 'workflow.md'))).toBe(true);
 
     rmSync(tmp, { recursive: true, force: true });
   }, 15000);

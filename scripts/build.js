@@ -451,6 +451,7 @@ This folder contains skills for all supported tools:
   .cursor/    -> Cursor
   .claude/    -> Claude Code
   .gemini/    -> Gemini CLI
+  .agent/     -> Antigravity
   .codex/     -> Codex custom agents (Codex skills use .agents/)
   .agents/    -> Codex CLI
   .github/    -> GitHub Copilot
@@ -645,11 +646,12 @@ async function build() {
       }
     }
 
-    for (const { provider, configDir, agentFormat } of Object.values(PROVIDERS)) {
+    for (const { provider, configDir, agentFormat, agentDir } of Object.values(PROVIDERS)) {
       if (!agentFormat) continue;
 
-      const agentsSrc = path.join(DIST_DIR, provider, configDir, 'agents');
-      const agentsDest = path.join(ROOT_DIR, configDir, 'agents');
+      const subDir = agentDir || 'agents';
+      const agentsSrc = path.join(DIST_DIR, provider, configDir, subDir);
+      const agentsDest = path.join(ROOT_DIR, configDir, subDir);
 
       if (fs.existsSync(agentsDest)) fs.rmSync(agentsDest, { recursive: true, force: true });
       if (fs.existsSync(agentsSrc)) {

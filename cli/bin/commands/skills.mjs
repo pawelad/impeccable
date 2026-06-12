@@ -22,9 +22,13 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const API_BASE = 'https://impeccable.style';
 
 // Provider folder names in project roots
-const PROVIDER_DIRS = ['.claude', '.cursor', '.gemini', '.agents', '.github', '.kiro', '.opencode', '.pi', '.qoder', '.trae', '.trae-cn', '.rovodev'];
+const PROVIDER_DIRS = ['.claude', '.cursor', '.gemini', '.agent', '.agents', '.github', '.kiro', '.opencode', '.pi', '.qoder', '.trae', '.trae-cn', '.rovodev'];
 const PROVIDER_ALIASES = {
+  agent: '.agent',
   agents: '.agents',
+  antigravity: '.agent',
+  'antigravity-cli': '.agent',
+  'antigravity-ide': '.agent',
   claude: '.claude',
   'claude-code': '.claude',
   codex: '.agents',
@@ -45,11 +49,15 @@ const PROVIDER_ALIASES = {
 // When a project has no harness folder yet, infer the target from globally
 // installed harnesses (~/.claude, ~/.codex, ...). Codex reads skills from
 // .agents/skills, so ~/.codex maps to the .agents bundle variant.
+// Antigravity (IDE, CLI, App) variants are mapped to the .agent variant.
 const GLOBAL_HARNESS_HINTS = [
   { home: '.claude', provider: '.claude' },
   { home: '.codex', provider: '.agents' },
   { home: '.cursor', provider: '.cursor' },
   { home: '.gemini', provider: '.gemini' },
+  { home: '.gemini/antigravity', provider: '.agent' },
+  { home: '.gemini/antigravity-cli', provider: '.agent' },
+  { home: '.gemini/antigravity-ide', provider: '.agent' },
   { home: '.kiro', provider: '.kiro' },
   { home: '.opencode', provider: '.opencode' },
   { home: '.qoder', provider: '.qoder' },
@@ -172,7 +180,7 @@ async function copyOrExtractLocalBundle(sourceValue) {
  */
 function normalizeForHash(content) {
   return content
-    .replace(/\.(claude|cursor|agents|github|gemini|codex|kiro|opencode|pi|qoder|trae|trae-cn|rovodev)\/skills\//g, '.PROVIDER/skills/')
+    .replace(/\.(agent|claude|cursor|agents|github|gemini|codex|kiro|opencode|pi|qoder|trae|trae-cn|rovodev)\/skills\//g, '.PROVIDER/skills/')
     .replace(/^version:\s*.+$/m, 'version: NORMALIZED');
 }
 
@@ -390,23 +398,43 @@ function resolveInstallTargets(root, providersValue) {
  */
 function copyProviderSkills(bundleDir, root, targets) {
   let written = 0;
+  // Subdirectories in a provider folder that we want to copy into the project.
+  // We copy the contents of 'skills' (one per skill) and the entirety of
+  // 'agents' and 'workflows' (shared across all skills).
+  const subDirs = ['skills', 'agents', 'workflows'];
+
   for (const provider of targets) {
-    const srcDir = join(bundleDir, provider, 'skills');
-    if (!existsSync(srcDir)) continue;
-    const localSkillsDir = join(root, provider, 'skills');
-    // A previous `npx skills` install may have left this provider's skills dir
-    // as a symlink to another provider's canonical copy. Drop the link so we
-    // write a real, provider-specific directory instead of writing through it.
-    try {
-      if (lstatSync(localSkillsDir).isSymbolicLink()) unlinkSync(localSkillsDir);
-    } catch {}
-    for (const skill of readdirSync(srcDir, { withFileTypes: true })) {
-      if (!skill.isDirectory()) continue;
-      const src = join(srcDir, skill.name);
-      const dest = join(localSkillsDir, skill.name);
-      rmSync(dest, { recursive: true, force: true });
-      copyDirSync(src, dest);
-      written++;
+    for (const subDir of subDirs) {
+      const srcDir = join(bundleDir, provider, subDir);
+      if (!existsSync(srcDir)) continue;
+
+      const localDir = join(root, provider, subDir);
+
+      // Special handling for the 'skills' folder: it contains per-skill
+      // subdirectories. We copy them one by one.
+      if (subDir === 'skills') {
+        // A previous `npx skills` install may have left this provider's skills dir
+        // as a symlink to another provider's canonical copy. Drop the link so we
+        // write a real, provider-specific directory instead of writing through it.
+        try {
+          if (lstatSync(localDir).isSymbolicLink()) unlinkSync(localDir);
+        } catch {}
+
+        for (const skill of readdirSync(srcDir, { withFileTypes: true })) {
+          if (!skill.isDirectory()) continue;
+          const src = join(srcDir, skill.name);
+          const dest = join(localDir, skill.name);
+          rmSync(dest, { recursive: true, force: true });
+          copyDirSync(src, dest);
+          written++;
+        }
+      } else {
+        // For 'agents' and 'workflows', we copy the entire directory.
+        rmSync(localDir, { recursive: true, force: true });
+        copyDirSync(srcDir, localDir);
+        // We don't increment 'written' for these as they are sidecars,
+        // and 'written' is used to report the number of skills installed.
+      }
     }
   }
   return written;
@@ -465,30 +493,53 @@ function linkProviderSkills(bundleRoot, root, targets, { force = false } = {}) {
   let skipped = 0;
 
   for (const { provider, localSkillsDir } of resolveUniqueLinkTargets(root, targets)) {
-    const srcDir = join(bundleRoot, provider, 'skills');
-    if (!existsSync(srcDir)) continue;
+    const subDirs = ['skills', 'agents', 'workflows'];
 
-    for (const skill of readdirSync(srcDir, { withFileTypes: true })) {
-      if (!skill.isDirectory()) continue;
-      const src = join(srcDir, skill.name);
-      const dest = join(localSkillsDir, skill.name);
+    for (const subDir of subDirs) {
+      const srcDir = join(bundleRoot, provider, subDir);
+      if (!existsSync(srcDir)) continue;
 
-      if (pathExistsOrLink(dest)) {
-        if (isSymlinkTo(dest, src)) {
-          already++;
-          continue;
+      const localDir = subDir === 'skills' ? localSkillsDir : join(root, provider, subDir);
+
+      if (subDir === 'skills') {
+        for (const skill of readdirSync(srcDir, { withFileTypes: true })) {
+          if (!skill.isDirectory()) continue;
+          const src = join(srcDir, skill.name);
+          const dest = join(localDir, skill.name);
+
+          if (pathExistsOrLink(dest)) {
+            if (isSymlinkTo(dest, src)) {
+              already++;
+              continue;
+            }
+            if (!force) {
+              console.warn(`Skipped existing ${provider}/skills/${skill.name}. Use --force to replace it with a link.`);
+              skipped++;
+              continue;
+            }
+            rmSync(dest, { recursive: true, force: true });
+          }
+
+          const target = relative(dirname(dest), src) || '.';
+          symlinkSync(target, dest, 'dir');
+          linked++;
         }
-        if (!force) {
-          console.warn(`Skipped existing ${provider}/skills/${skill.name}. Use --force to replace it with a link.`);
-          skipped++;
-          continue;
+      } else {
+        // Link 'agents' and 'workflows' as a whole
+        if (pathExistsOrLink(localDir)) {
+          if (isSymlinkTo(localDir, srcDir)) {
+            continue;
+          }
+          if (!force) {
+            console.warn(`Skipped existing ${provider}/${subDir}. Use --force to replace it with a link.`);
+            continue;
+          }
+          rmSync(localDir, { recursive: true, force: true });
         }
-        rmSync(dest, { recursive: true, force: true });
+        mkdirSync(dirname(localDir), { recursive: true });
+        const target = relative(dirname(localDir), srcDir) || '.';
+        symlinkSync(target, localDir, 'dir');
       }
-
-      const target = relative(dirname(dest), src) || '.';
-      symlinkSync(target, dest, 'dir');
-      linked++;
     }
   }
 
@@ -755,18 +806,30 @@ async function update(flags = []) {
     // are only written once with the correct provider's content.
     const unique = deduplicateProviders(root, copyProviders);
     let updated = 0;
-    for (const { provider, localSkillsDir } of unique) {
-      const srcDir = join(tmpDir, provider, 'skills');
-      if (!existsSync(srcDir)) continue;
+    const subDirs = ['skills', 'agents', 'workflows'];
 
-      const skills = readdirSync(srcDir, { withFileTypes: true });
-      for (const skill of skills) {
-        if (!skill.isDirectory()) continue;
-        const src = join(srcDir, skill.name);
-        const dest = join(localSkillsDir, skill.name);
-        if (existsSync(dest)) rmSync(dest, { recursive: true });
-        copyDirSync(src, dest);
-        updated++;
+    for (const { provider } of unique) {
+      for (const subDir of subDirs) {
+        const srcDir = join(tmpDir, provider, subDir);
+        if (!existsSync(srcDir)) continue;
+
+        const localDir = join(root, provider, subDir);
+
+        if (subDir === 'skills') {
+          const skills = readdirSync(srcDir, { withFileTypes: true });
+          for (const skill of skills) {
+            if (!skill.isDirectory()) continue;
+            const src = join(srcDir, skill.name);
+            const dest = join(localDir, skill.name);
+            if (existsSync(dest)) rmSync(dest, { recursive: true });
+            copyDirSync(src, dest);
+            updated++;
+          }
+        } else {
+          // For 'agents' and 'workflows', refresh the entire directory
+          rmSync(localDir, { recursive: true, force: true });
+          copyDirSync(srcDir, localDir);
+        }
       }
     }
 

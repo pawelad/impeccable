@@ -128,6 +128,19 @@ function buildClaudeAgent(agent, body) {
   return `${generateYamlFrontmatter(frontmatter)}\n${body.trim()}\n`;
 }
 
+function buildAntigravityAgent(agent, body) {
+  const frontmatter = {
+    name: agent.claudeName || agent.name,
+    description: agent.description,
+  };
+
+  if (agent.tools) frontmatter.tools = agent.tools;
+  if (agent.model) frontmatter.model = agent.model;
+  if (agent.effort) frontmatter.effort = agent.effort;
+
+  return `${generateYamlFrontmatter(frontmatter)}\n# ${frontmatter.name}\n\n${body.trim()}\n`;
+}
+
 function buildAgentFile(config, agent, body) {
   if (config.agentFormat === 'codex-toml') {
     return {
@@ -140,6 +153,13 @@ function buildAgentFile(config, agent, body) {
     return {
       filename: `${agent.claudeName || agent.name}.md`,
       content: buildClaudeAgent(agent, body),
+    };
+  }
+
+  if (config.agentFormat === 'antigravity-md') {
+    return {
+      filename: `${agent.claudeName || agent.name}.md`,
+      content: buildAntigravityAgent(agent, body),
     };
   }
 
@@ -283,7 +303,8 @@ export function createTransformer(config) {
     }
 
     if (config.agentFormat) {
-      const agentsDir = path.join(providerDir, `${configDir}/agents`);
+      const subDir = config.agentDir || 'agents';
+      const agentsDir = path.join(providerDir, `${configDir}/${subDir}`);
       for (const skill of skills) {
         for (const agent of skill.agents || []) {
           // Agents can declare `providers: <list>` to limit which harnesses

@@ -54,6 +54,15 @@ export const PROVIDERS = {
     includeVersion: false,
     writeOpenAIMetadata: true,
   },
+  antigravity: {
+    provider: 'antigravity',
+    providerTags: ['antigravity', 'claude'],
+    configDir: '.agent',
+    displayName: 'Antigravity',
+    frontmatterFields: ['user-invocable', 'argument-hint', 'license', 'compatibility', 'metadata', 'allowed-tools'],
+    agentFormat: 'antigravity-md',
+    agentDir: 'workflows',
+  },
   github: {
     provider: 'github',
     providerTags: ['github'],
