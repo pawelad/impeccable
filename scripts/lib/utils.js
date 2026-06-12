@@ -555,6 +555,12 @@ export const PROVIDER_PLACEHOLDERS = {
     ask_instruction: 'ask the user directly to clarify what you cannot infer.',
     command_prefix: '/'
   },
+  'antigravity': {
+    model: 'Gemini',
+    config_file: 'AGENTS.md',
+    ask_instruction: 'ask the user directly to clarify what you cannot infer.',
+    command_prefix: '/'
+  },
   'codex': {
     model: 'GPT',
     config_file: 'AGENTS.md',
@@ -607,6 +613,7 @@ export const PROVIDER_PLACEHOLDERS = {
 
 export const PROVIDER_BLOCK_TAGS = new Set([
   'agents',
+  'antigravity',
   'claude',
   'claude-code',
   'codex',
